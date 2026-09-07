@@ -51,3 +51,38 @@ def risk_report_lines(patients):
     for patient in patients:
         score = vitals.risk_score(patient)
         yield f"{patient['id']:<16} {patient['name']:<16} risk={score:>3} ({vitals.risk_label(score)})"
+
+
+
+#   - `count_departments(node)` → recursively counts every department.
+#   - `list_departments(node)` → recursively returns an **indented** list of names.
+
+# Loop over the children and call the same function on each child.
+
+
+def count_departments(node):
+    """Recursively count every department in the hospital tree.
+
+    We count each *child* department (not the hospital root itself).
+    Base case  : a node with no children adds nothing further.
+    Recursive  : each child is 1 + however many it contains.
+    """
+    children = node.get('sub', node.get('departments', []))
+    total = 0
+    for child in children:
+        total += 1 + count_departments(child)     # function calls itself
+    return total
+
+
+
+def list_departments(node, depth=0, acc=None):
+    """Recursively collect an indented department listing"""
+    if acc is None:
+        acc = []
+    name = node.get("name", "")
+    if name and depth > 0:
+        acc.append(("  " * (depth - 1)) + "- " + name)
+    for child in node.get("sub", node.get("departments", [])):
+        list_departments(child, depth + 1, acc)
+    return acc
+

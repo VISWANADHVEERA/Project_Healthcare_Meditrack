@@ -57,3 +57,32 @@ patients = [
 
     }
 ]
+
+
+#add a **nested** `HOSPITAL` dict: a name plus a
+#`departments` list, where each department can have its own `sub` list of
+# departments
+
+HOSPITAL = {
+    "name": "MediTrack General Hospital",
+    "departments": [
+        {
+            "name": "Internal Medicine",
+            "sub": [
+                {"name": "Cardiology", "sub": []},
+                {"name": "Endocrinology", "sub": []},
+            ],
+        },
+        {
+            "name": "Surgery",
+            "sub": [
+                {"name": "Orthopedics", "sub": []},
+                {
+                    "name": "Neurosurgery",
+                    "sub": [{"name": "Spine Unit", "sub": []}],
+                },
+            ],
+        },
+        {"name": "Pediatrics", "sub": []},
+    ],
+}
