@@ -102,4 +102,4 @@ if __name__ == "__main__":
         }
 
 
-#print(risk_label(risk_score(patient)))
+print(risk_label(risk_score(patient)))
