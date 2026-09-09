@@ -1,128 +1,109 @@
 """
-storage.py  -- Saving & loading data to files .
-
-Concepts practiced here:
-- open() + the `with` context manager (auto-closes the file)
-- text modes  : 'w' (write/overwrite), 'a' (append), 'r' (read)
-- methods     : write(), writelines(), read(), readline(), readlines()
-- cursor      : tell() and seek()
-- iterating a file line by line
-- handling FileNotFoundError when a file does not exist yet
-- os module to build safe file paths / make folders
+storage.py -- Saving & loading data to files.
 """
 
-import os                      
+import os
 
-# ---- Build file paths relative to the PROJECT folder  ----
-# __file__ = .../meditrack/storage.py -> go up one level to the project root.
 _PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(_PROJECT_DIR, "data")
 PATIENTS_FILE = os.path.join(DATA_DIR, "patients.txt")
 VISIT_LOG_FILE = os.path.join(DATA_DIR, "patient_visits.txt")
 
-# The order of columns we write into the patients file.
 _HEADER = ("ID|NAME|DOB|GENDER|BLOOD_GROUP|ALLERGIES|"
-           "height_cm|weight_kg|systolic|diastolic|heart_rate|temperature_c")
+           "height_cm|weight_kg|systolic|diastolic|heart_rate|temperature_f")
 
 
 def _ensure_data_dir():
-    """Create the data/ folder if it doesn't exist (Class 18: os)."""
+    """Create the data/ folder if it doesn't exist."""
     os.makedirs(DATA_DIR, exist_ok=True)
 
 
-# ------------------------------------------------------------------ #
-#  SAVE  -- write mode 'w' + writelines()
-# ------------------------------------------------------------------ #
 def save_patients(patients, path=PATIENTS_FILE):
-    """Write every patient to a text file, one record per line.
-
-    Mode 'w' CREATES the file (or ERASES its old contents first), then we
-    write fresh data. Each field is separated by '|', allergies by ','.
-    """
+    """Write every patient to a text file, one record per line."""
     _ensure_data_dir()
-    lines = [_HEADER + "\n"]                      # first line = column header
+    lines = [_HEADER + "\n"]
     for p in patients:
-        v = p["VITALS"]
-        allergy_csv = ",".join(sorted(p["ALLERGIES"]))   # set -> 'a,b,c'
-        # Build one delimited line for this patient .
+        v = p.get("VITALS", {})
+        allergy_csv = ",".join(sorted(p.get("ALLERGIES", set())))
+        
+        # Safely resolve temperature key
+        temp = v.get("temperature_f", v.get("temaperature_f", v.get("temperature_c", 98.6)))
+        
         line = "|".join([
-            p["ID"], p["NAME"], p["DOB"], p["GENDER"], p["BLOOD_GROUP"],
+            str(p.get("ID", "")),
+            str(p.get("NAME", "")),
+            str(p.get("DOB", "")),
+            str(p.get("GENDER", "")),
+            str(p.get("BLOOD_GROUP", "")),
             allergy_csv,
-            str(v["height_cm"]), str(v["weight_kg"]),
-            str(v["systolic"]), str(v["diastolic"]),
-            str(v["heart_rate"]), str(v["temperature_c"]),
+            str(v.get("height_cm", 0)),
+            str(v.get("weight_kg", 0)),
+            str(v.get("systolic", 0)),
+            str(v.get("diastolic", 0)),
+            str(v.get("heart_rate", 0)),
+            str(temp),
         ]) + "\n"
         lines.append(line)
 
-    # `with` auto-closes the file even if an error happens inside the block.
-    with open(path, "w") as f:                    # 'w' = write/overwrite
-        f.writelines(lines)                       # write a list of lines
-    return len(patients)                          # how many we saved
+    with open(path, "w") as f:
+        f.writelines(lines)
+    return len(patients)
 
 
-# ------------------------------------------------------------------ #
-#  LOAD  -- read mode 'r' + readlines() + FileNotFoundError handling
-# ------------------------------------------------------------------ #
 def load_patients(path=PATIENTS_FILE):
-    """Read patients back from the text file into a list of dicts.
-
-    If the file has never been created, we catch FileNotFoundError and
-    simply return an empty list instead of crashing.
-    """
+    """Read patients back from the text file into a list of dicts."""
     patients = []
     try:
-        with open(path, "r") as f:                # 'r' = read only
-            lines = f.readlines()                 # list, one string per line
+        with open(path, "r") as f:
+            lines = f.readlines()
     except FileNotFoundError:
-        return patients                           # nothing saved yet
+        return patients
 
-    for line in lines[1:]:                        # skip the header row
-        line = line.strip()                       # drop the trailing newline
+    for line in lines[1:]:
+        line = line.strip()
         if not line:
-            continue                              # skip blank lines
-        parts = line.split("|")                   # reverse of our join
+            continue
+        parts = line.split("|")
         if len(parts) != 12:
-            continue                              # skip malformed lines
+            continue
         (pid, name, dob, gender, bg, allergy_csv,
          height, weight, sys_bp, dia_bp, hr, temp) = parts
 
-        # Rebuild the nested structures we flattened when saving.
-        allergies = {a for a in allergy_csv.split(",") if a}   # set
+        allergies = {a for a in allergy_csv.split(",") if a}
         patient = {
-            "ID": pid, "NAME": name, "DOB": dob,
-            "GENDER": gender, "BLOOD_GROUP": bg,
+            "ID": pid,
+            "NAME": name,
+            "DOB": dob,
+            "GENDER": gender,
+            "BLOOD_GROUP": bg,
             "ALLERGIES": allergies,
             "VITALS": {
-                "height_cm": float(height), "weight_kg": float(weight),
-                "systolic": int(sys_bp), "diastolic": int(dia_bp),
-                "heart_rate": int(hr), "temperature_c": float(temp),
+                "height_cm": float(height),
+                "weight_kg": float(weight),
+                "systolic": int(sys_bp),
+                "diastolic": int(dia_bp),
+                "heart_rate": int(hr),
+                "temperature_f": float(temp),
             },
-            "VISITS": [],   # visits live in the separate visit-log file
+            "VISITS": [],
         }
         patients.append(patient)
     return patients
 
 
-# ------------------------------------------------------------------ #
-#  VISIT LOG  -- append mode 'a'  
-# ------------------------------------------------------------------ #
 def log_visit(patient_id, name, symptom, path=VISIT_LOG_FILE):
-    """Append ONE visit line to the log file.
-
-    Mode 'a' keeps existing content and adds to the END of the file,
-    so previous visits are never lost.
-    """
+    """Append ONE visit line to the log file."""
     _ensure_data_dir()
-    with open(path, "a") as f:                    # 'a' = append
+    with open(path, "a") as f:
         f.write(f"{patient_id}, {name}, {symptom}\n")
 
 
 def read_visit_log(path=VISIT_LOG_FILE):
-    """Return every visit line as a list (iterate the file line by line)."""
+    """Return every visit line as a list."""
     log = []
     try:
         with open(path, "r") as f:
-            for line in f:                        # a file is iterable!
+            for line in f:
                 line = line.strip()
                 if line:
                     log.append(line)
@@ -131,22 +112,18 @@ def read_visit_log(path=VISIT_LOG_FILE):
     return log
 
 
-# ------------------------------------------------------------------ #
-#  PREVIEW  -- demonstrates readline() + tell()/seek() cursor control
-# ------------------------------------------------------------------ #
 def preview_file(path, n_lines=3):
-    """Return the first `n_lines` of a file using readline(), and report the
-    cursor position with tell(). Shows seek() by rewinding to the start."""
+    """Return first n_lines of a file with cursor report."""
     preview = []
     try:
         with open(path, "r") as f:
             for _ in range(n_lines):
-                line = f.readline()               # read ONE line at a time
-                if not line:                      # end of file reached
+                line = f.readline()
+                if not line:
                     break
                 preview.append(line.strip())
-            position = f.tell()                   # where is the cursor now?
-            f.seek(0)                             # rewind to the beginning
+            position = f.tell()
+            f.seek(0)
     except FileNotFoundError:
         return [], 0
     return preview, position
